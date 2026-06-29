@@ -29,3 +29,10 @@ input:focus, select:focus { outline: none; border-color: #D4AF37; }
 .alert { padding: 1rem; border-radius: 16px; margin: 1rem 0; }
 .alert-success { background: #e6f7e6; border-left: 4px solid #2ecc71; }
 .alert-error { background: #fde8e8; border-left: 4px solid #e74c3c; }
+.btn-danger {
+    background: #c0392b;
+    color: white;
+}
+.btn-danger:hover {
+    background: #e74c3c;
+}

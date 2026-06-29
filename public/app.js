@@ -56,6 +56,95 @@ document.querySelectorAll('.nav-links a[data-page]').forEach(link => {
     });
 });
 
+// ============================================
+// PNG DOWNLOAD FUNCTION
+// ============================================
+window.downloadPNG = function(svgId, filename) {
+    const svg = document.getElementById(svgId);
+    if (!svg) {
+        alert('Barcode not found');
+        return;
+    }
+
+    // Clone SVG to avoid modifying original
+    const clone = svg.cloneNode(true);
+    // Set dimensions
+    const bbox = svg.getBBox();
+    clone.setAttribute('width', bbox.width + 20);
+    clone.setAttribute('height', bbox.height + 20);
+    // Add white background
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('width', '100%');
+    rect.setAttribute('height', '100%');
+    rect.setAttribute('fill', 'white');
+    clone.insertBefore(rect, clone.firstChild);
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clone);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        const link = document.createElement('a');
+        link.download = `${filename}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    };
+    img.src = url;
+};
+
+// ============================================
+// DELETE FUNCTIONS
+// ============================================
+window.deleteBarcode = async function(barcode) {
+    if (!confirm(`Delete barcode ${barcode}?`)) return;
+    try {
+        const res = await fetch(`${API_BASE}/barcode/${barcode}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            loadPage('barcodes'); // Refresh list
+        } else {
+            alert('❌ ' + (data.message || 'Delete failed'));
+        }
+    } catch (err) {
+        alert('❌ Error: ' + err.message);
+    }
+};
+
+window.deleteAllBarcodes = async function() {
+    if (!confirm('⚠️ Delete ALL barcodes? This cannot be undone!')) return;
+    if (!confirm('Are you sure?')) return;
+    try {
+        const res = await fetch(`${API_BASE}/barcodes/all`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            loadPage('barcodes');
+        } else {
+            alert('❌ ' + (data.message || 'Delete failed'));
+        }
+    } catch (err) {
+        alert('❌ Error: ' + err.message);
+    }
+};
+
+// ============================================
+// DASHBOARD
+// ============================================
 async function loadDashboard() {
     const res = await fetch(`${API_BASE}/stats`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) { logout(); return; }
@@ -76,6 +165,9 @@ async function loadDashboard() {
     `;
 }
 
+// ============================================
+// GENERATE BARCODES
+// ============================================
 async function loadGenerate() {
     document.getElementById('page-generate').innerHTML = `
         <div class="page active" id="page-generate">
@@ -106,21 +198,34 @@ async function loadGenerate() {
         });
         const data = await res.json();
         document.getElementById('genResult').innerHTML = data.success ? `<div class="alert alert-success">✅ ${data.count} barcodes generated</div>` : `<div class="alert alert-error">❌ ${data.error}</div>`;
-        // Preview first 10
+        // Preview first 10 with download & delete buttons
         const preview = document.getElementById('barcodePreview');
         preview.innerHTML = '';
-        for (let i = start; i <= Math.min(start+9, end); i++) {
+        const limit = Math.min(start+9, end);
+        for (let i = start; i <= limit; i++) {
             const num = String(i).padStart(pad, '0');
             const barcode = prefix + num;
             const div = document.createElement('div');
             div.className = 'barcode-item';
-            div.innerHTML = `<svg id="preview-${i}"></svg><div class="code">${barcode}</div>`;
+            div.innerHTML = `
+                <svg id="preview-${i}"></svg>
+                <div class="code">${barcode}</div>
+                <div style="margin-top:8px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+                    <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="downloadPNG('preview-${i}', '${barcode}')">📥 PNG</button>
+                    <button class="btn btn-danger" style="padding:4px 12px; font-size:12px; background:#c0392b; color:white;" onclick="deleteBarcode('${barcode}')">🗑️ Delete</button>
+                </div>
+            `;
             preview.appendChild(div);
-            try { JsBarcode(`#preview-${i}`, barcode, { format: 'CODE128', width: 1.8, height: 50, displayValue: false, margin: 4 }); } catch(e) {}
+            try {
+                JsBarcode(`#preview-${i}`, barcode, { format: 'CODE128', width: 2.0, height: 60, displayValue: false, margin: 8 });
+            } catch(e) {}
         }
     };
 }
 
+// ============================================
+// ASSIGN ORIGIN
+// ============================================
 async function loadAssign() {
     document.getElementById('page-assign').innerHTML = `
         <div class="page active" id="page-assign">
@@ -162,6 +267,9 @@ async function loadAssign() {
     };
 }
 
+// ============================================
+// VERIFY BARCODE
+// ============================================
 async function loadVerify() {
     document.getElementById('page-verify').innerHTML = `
         <div class="page active" id="page-verify">
@@ -188,20 +296,60 @@ async function loadVerify() {
     };
 }
 
+// ============================================
+// ALL BARCODES (with Download & Delete)
+// ============================================
 async function loadBarcodes() {
-    const res = await fetch(`${API_BASE}/barcodes?limit=50`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_BASE}/barcodes?limit=100`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) { logout(); return; }
     const data = await res.json();
-    const rows = data.data.map(b => `<tr><td>${b.barcode_value}</td><td>${b.origin || '-'}</td><td>${b.batch_info || '-'}</td><td>${b.is_sold ? '✅ Sold' : 'Available'}</td></tr>`).join('');
+    
+    let rows = '';
+    data.data.forEach((b, index) => {
+        const svgId = `list-barcode-${index}`;
+        rows += `
+            <tr>
+                <td>
+                    <svg id="${svgId}" style="height:40px;"></svg>
+                    <div style="font-size:11px; margin-top:4px;">${b.barcode_value}</div>
+                </td>
+                <td>${b.origin || '-'}</td>
+                <td>${b.batch_info || '-'}</td>
+                <td>${b.is_sold ? '✅ Sold' : 'Available'}</td>
+                <td>
+                    <button class="btn btn-secondary" style="padding:2px 10px; font-size:11px;" onclick="downloadPNG('${svgId}', '${b.barcode_value}')">📥</button>
+                    <button class="btn btn-danger" style="padding:2px 10px; font-size:11px; background:#c0392b; color:white;" onclick="deleteBarcode('${b.barcode_value}')">🗑️</button>
+                </td>
+            </tr>
+        `;
+    });
+
     document.getElementById('page-barcodes').innerHTML = `
         <div class="page active" id="page-barcodes">
-            <h1>📋 All Barcodes (${data.total})</h1>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <h1>📋 All Barcodes (${data.total})</h1>
+                <button class="btn btn-danger" style="background:#c0392b; color:white;" onclick="deleteAllBarcodes()">🗑️ Delete All</button>
+            </div>
             <div class="card" style="overflow-x:auto;">
                 <table style="width:100%; border-collapse: collapse;">
-                    <thead><tr><th>Barcode</th><th>Origin</th><th>Batch</th><th>Status</th></tr></thead>
-                    <tbody>${rows}</tbody>
+                    <thead><tr><th>Barcode</th><th>Origin</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="5">No barcodes found</td></tr>'}</tbody>
                 </table>
             </div>
         </div>
     `;
+
+    // Generate barcodes for the list
+    data.data.forEach((b, index) => {
+        const svgId = `list-barcode-${index}`;
+        try {
+            JsBarcode(`#${svgId}`, b.barcode_value, {
+                format: 'CODE128',
+                width: 1.5,
+                height: 40,
+                displayValue: false,
+                margin: 4
+            });
+        } catch(e) {}
+    });
 }

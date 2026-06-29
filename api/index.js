@@ -24,6 +24,8 @@ const verifyHandler = require('./verify');
 const soldHandler = require('./sold');
 const barcodesHandler = require('./barcodes');
 const statsHandler = require('./stats');
+const deleteHandler = require('./delete');
+const deleteAllHandler = require('./delete').deleteAll;
 
 // Auth endpoints
 app.post('/api/login', (req, res) => {
@@ -44,7 +46,9 @@ app.get('/api/verify/:barcode', (req, res) => verifyHandler(req, res));
 app.post('/api/sold', (req, res) => soldHandler(req, res));
 app.get('/api/barcodes', (req, res) => barcodesHandler(req, res));
 app.get('/api/stats', (req, res) => statsHandler(req, res));
-
+// Delete routes
+app.delete('/api/barcode/:barcode', (req, res) => deleteHandler(req, res));
+app.delete('/api/barcodes/all', (req, res) => deleteAllHandler(req, res));
 // Serve static files
 app.use(express.static(path.join(__dirname, '../public')));
 
