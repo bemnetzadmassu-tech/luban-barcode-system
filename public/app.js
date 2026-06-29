@@ -1,6 +1,32 @@
 const API_BASE = '/api';
 let token = localStorage.getItem('token');
 
+// ============================================
+// ROUTES DEFINITION (must be defined early)
+// ============================================
+const routes = {
+    dashboard: loadDashboard,
+    generate: loadGenerate,
+    assign: loadAssign,
+    verify: loadVerify,
+    barcodes: loadBarcodes
+};
+
+// ============================================
+// PAGE LOADER
+// ============================================
+async function loadPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const content = document.getElementById('content');
+    content.innerHTML = `<div class="page active" id="page-${page}">Loading...</div>`;
+    if (routes[page]) await routes[page]();
+    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+    document.querySelector(`.nav-links a[data-page="${page}"]`)?.classList.add('active');
+}
+
+// ============================================
+// AUTH & NAV
+// ============================================
 if (!token) {
     const password = prompt('Enter admin password:');
     if (password) {
@@ -32,23 +58,9 @@ function logout() {
 }
 document.getElementById('logoutBtn').addEventListener('click', logout);
 
-const routes = {
-    dashboard: loadDashboard,
-    generate: loadGenerate,
-    assign: loadAssign,
-    verify: loadVerify,
-    barcodes: loadBarcodes
-};
-
-async function loadPage(page) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const content = document.getElementById('content');
-    content.innerHTML = `<div class="page active" id="page-${page}">Loading...</div>`;
-    if (routes[page]) await routes[page]();
-    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
-    document.querySelector(`.nav-links a[data-page="${page}"]`)?.classList.add('active');
-}
-
+// ============================================
+// NAV LINKS
+// ============================================
 document.querySelectorAll('.nav-links a[data-page]').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -65,14 +77,10 @@ window.downloadPNG = function(svgId, filename) {
         alert('Barcode not found');
         return;
     }
-
-    // Clone SVG to avoid modifying original
     const clone = svg.cloneNode(true);
-    // Set dimensions
     const bbox = svg.getBBox();
     clone.setAttribute('width', bbox.width + 20);
     clone.setAttribute('height', bbox.height + 20);
-    // Add white background
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('width', '100%');
     rect.setAttribute('height', '100%');
@@ -113,7 +121,7 @@ window.deleteBarcode = async function(barcode) {
         const data = await res.json();
         if (data.success) {
             alert(`✅ ${data.message}`);
-            loadPage('barcodes'); // Refresh list
+            loadPage('barcodes');
         } else {
             alert('❌ ' + (data.message || 'Delete failed'));
         }
@@ -198,7 +206,6 @@ async function loadGenerate() {
         });
         const data = await res.json();
         document.getElementById('genResult').innerHTML = data.success ? `<div class="alert alert-success">✅ ${data.count} barcodes generated</div>` : `<div class="alert alert-error">❌ ${data.error}</div>`;
-        // Preview first 10 with download & delete buttons
         const preview = document.getElementById('barcodePreview');
         preview.innerHTML = '';
         const limit = Math.min(start+9, end);
@@ -339,7 +346,6 @@ async function loadBarcodes() {
         </div>
     `;
 
-    // Generate barcodes for the list
     data.data.forEach((b, index) => {
         const svgId = `list-barcode-${index}`;
         try {
